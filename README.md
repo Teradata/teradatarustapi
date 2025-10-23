@@ -137,11 +137,11 @@ The `sample` program demonstrates how to execute a variety of SQL requests and o
 
 The `cmdline` program offers a simple command line interface to execute SQL requests from the command line.
 
-    cargo run --bin cmdline ../gosidebuild '{"host":"databasename","user":"guest","password":"please"}' "select * from DBC.DBCInfo order by 1"
+    cargo run --bin cmdline . '{"host":"databasename","user":"guest","password":"please"}' "select * from DBC.DBCInfo order by 1"
 
 Multiple SQL requests can be specified for the `cmdline` program, and bind values must be specified after each SQL request. Specify bind values as a JSON array of arrays, or specify JSON `null` for no bind values.
 
-    cargo run --bin cmdline ../gosidebuild '{"host":"databasename","user":"guest","password":"please"}' \
+    cargo run --bin cmdline . '{"host":"databasename","user":"guest","password":"please"}' \
     "create volatile table vtab (c1 integer, c2 varchar(100)) on commit preserve rows" null \
     "insert into vtab values (?, ?)" '[[123,"hello"],[456,"world"],[789,null]]' \
     "select * from vtab order by 1"

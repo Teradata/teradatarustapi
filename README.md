@@ -28,6 +28,7 @@ Copyright 2025 Teradata. All Rights Reserved.
 * [License](#License)
 * [Documentation](#Documentation)
 * [Sample Programs](#SamplePrograms)
+* [Library Functions](#LibraryFunctions)
 * [Connection Parameters](#ConnectionParameters)
 * [FIPS Mode](#FIPSMode)
 * [COP Discovery](#COPDiscovery)
@@ -41,7 +42,6 @@ Copyright 2025 Teradata. All Rights Reserved.
 * [Data Types](#DataTypes)
 * [Null Values](#NullValues)
 * [Character Export Width](#CharacterExportWidth)
-* [Library Functions](#LibraryFunctions)
 * [Escape Syntax](#EscapeSyntax)
 * [FastLoad](#FastLoad)
 * [FastExport](#FastExport)
@@ -125,17 +125,22 @@ The `README.md` file is a plain text file containing the documentation for the d
 
 ### Sample Programs
 
-Sample programs are provided to demonstrate how to use this package. The sample programs can be executed with the `cargo run` command.
+Sample programs are provided to demonstrate how to use this package.
 
-The first command line argument of each sample program is the directory name for the directory containing the Teradata GoSQL Driver DLLs and shared libraries. This is typically the top level directory of the repo.
+Program                                                                                | Description
+-------------------------------------------------------------------------------------- | ---
+[sample.rs](https://github.com/Teradata/teradatarustapi/blob/main/src/bin/sample.rs)   | Demonstrates how to programmatically execute a variety of SQL requests and print the results
+[cmdline.rs](https://github.com/Teradata/teradatarustapi/blob/main/src/bin/cmdline.rs) | Simple command line interface to execute SQL requests and print the results
 
-The second command line argument of each sample program is the connection parameter JSON string.
+The sample programs can be executed with the `cargo run` command.
+* The first command line argument of each sample program is the directory name for the directory containing the Teradata GoSQL Driver DLLs and shared libraries. This is typically the top level directory of the repo.
+* The second command line argument of each sample program is the connection parameter JSON string.
 
 The `sample` program demonstrates how to execute a variety of SQL requests and obtain the results.
 
     cargo run --bin sample . '{"host":"databasename","user":"guest","password":"please"}'
 
-The `cmdline` program offers a simple command line interface to execute SQL requests from the command line.
+The `cmdline` program offers a simple command line interface to execute SQL requests.
 
     cargo run --bin cmdline . '{"host":"databasename","user":"guest","password":"please"}' "select * from DBC.DBCInfo order by 1"
 
@@ -145,6 +150,264 @@ Multiple SQL requests can be specified for the `cmdline` program, and bind value
     "create volatile table vtab (c1 integer, c2 varchar(100)) on commit preserve rows" null \
     "insert into vtab values (?, ?)" '[[123,"hello"],[456,"world"],[789,null]]' \
     "select * from vtab order by 1"
+
+<a id="LibraryFunctions"></a>
+
+### Library Functions
+
+This package's `lib.rs` provides the following `pub` functions.
+
+---
+
+#### `teradatarustapi::load_driver`
+
+Loads the Teradata GoSQL Driver DLL or shared library from the specified directory.
+
+    pub fn load_driver(
+        lib_dir: &str
+    ) -> Result<(), String>
+
+**Arguments:**
+- `lib_dir`: Path to the directory containing the shared library.
+
+**Returns:**
+- `Ok(())` if the library was loaded successfully.
+- `Err(String)` with an error message if loading failed.
+
+---
+
+#### `teradatarustapi::create_connection`
+
+Establishes a new connection to the Teradata database using the provided connection parameters.
+
+    pub fn create_connection(
+        connect_params_json: &str,
+    ) -> Result<(u64, u64), String>
+
+**Arguments:**
+- `connect_params_json`: JSON string containing connection parameters.
+
+**Returns:**
+- `Ok((u_log, conn_handle))`: Tuple with log bitmask and connection handle.
+- `Err(String)`: Error message if connection creation fails.
+
+---
+
+#### `teradatarustapi::go_close_connection_wrapper`
+
+Closes an open database connection.
+
+    pub fn go_close_connection_wrapper(
+        u_log: u64,
+        conn_handle: u64,
+    ) -> Result<(), String>
+
+**Arguments:**
+- `u_log`: Log bitmask for the session.
+- `conn_handle`: Connection handle to close.
+
+**Returns:**
+- `Ok(())` if the connection was closed successfully.
+- `Err(String)` if closing failed.
+
+---
+
+#### `teradatarustapi::rustgo_create_rows_wrapper`
+
+Submits a SQL request to the database and creates a result set.
+Specify bind values as a string containing a JSON array of arrays or JSON `null` for no bind values.
+
+    pub fn rustgo_create_rows_wrapper(
+        u_log: u64,
+        conn_handle: u64,
+        request_text: &str,
+        bind_values: &str,
+    ) -> Result<u64, String>
+
+**Arguments:**
+- `u_log`: Log bitmask for the session.
+- `conn_handle`: Connection handle.
+- `request_text`: SQL request string.
+- `bind_values`: JSON string of bind values.
+
+**Returns:**
+- `Ok(rows_handle)`: Handle for the created rows/result set.
+- `Err(String)`: Error message if creation fails.
+
+---
+
+#### `teradatarustapi::go_cancel_request_wrapper`
+
+Cancels an in-progress database request.
+
+    pub fn go_cancel_request_wrapper(
+        u_log: u64,
+        conn_handle: u64,
+    ) -> Result<(), String>
+
+**Arguments:**
+- `u_log`: Log bitmask for the session.
+- `conn_handle`: Connection handle.
+
+**Returns:**
+- `Ok(())` if the request was cancelled.
+- `Err(String)` if cancellation failed.
+
+---
+
+#### `teradatarustapi::rustgo_result_metadata_wrapper`
+
+Retrieves metadata for a result set, such as activity count, activity type, activity name (kind of SQL request), and column metadata.
+
+    pub fn rustgo_result_metadata_wrapper(
+        u_log: u64,
+        rows_handle: u64,
+    ) -> Result<(u64, u16, String, String), String>
+
+**Arguments:**
+- `u_log`: Log bitmask for the session.
+- `rows_handle`: Rows/result set handle.
+
+**Returns:**
+- `Ok((activity_count, activity_type, activity_name, column_metadata))`: Tuple with metadata.
+- `Err(String)`: Error message if retrieval fails.
+
+Column metadata is a string containing a JSON object.
+
+Key          | Value
+------------ | ---
+ColumnName   | Column names as JSON array of string
+MaxByteCount | Maximum column byte count as JSON array of number
+Nullable     | Column nullability as JSON array of boolean
+Precision    | Column precision as JSON array of number
+Scale        | Column scale as JSON array of number
+TypeName     | Column types as JSON array of string
+
+For example, given the following table:
+
+    create table tab (c1 integer, c2 varchar(100))
+
+The query `select * from tab` would produce the following column metadata:
+
+    {"ColumnName":["c1","c2"],"MaxByteCount":[4,200],"Nullable":[true,true],"Precision":[10,0],"Scale":[0,0],"TypeName":["INTEGER","VARCHAR"]}
+
+---
+
+#### `teradatarustapi::rustgo_fetch_row_wrapper`
+
+Fetches the next row from a result set. The row is returned as a string containing a JSON array of column values.
+
+    pub fn rustgo_fetch_row_wrapper(
+        u_log: u64,
+        rows_handle: u64,
+    ) -> Result<Option<String>, String>
+
+**Arguments:**
+- `u_log`: Log bitmask for the session.
+- `rows_handle`: Rows/result set handle.
+
+**Returns:**
+- `Ok(Some(row))`: JSON string for a fetched row.
+- `Ok(None)`: No more rows.
+- `Err(String)`: Error message if fetch fails.
+
+---
+
+#### `teradatarustapi::go_next_result_wrapper`
+
+Advances to the next result set, if available.
+
+    pub fn go_next_result_wrapper(
+        u_log: u64,
+        rows_handle: u64,
+    ) -> Result<bool, String>
+
+**Arguments:**
+- `u_log`: Log bitmask for the session.
+- `rows_handle`: Rows/result set handle.
+
+**Returns:**
+- `Ok(true)`: Another result set is available.
+- `Ok(false)`: No more results.
+- `Err(String)`: Error message if operation fails.
+
+---
+
+#### `teradatarustapi::go_close_rows_wrapper`
+
+Closes a result set and releases associated resources.
+
+    pub fn go_close_rows_wrapper(
+        u_log: u64,
+        rows_handle: u64,
+    ) -> Result<(), String>
+
+**Arguments:**
+- `u_log`: Log bitmask for the session.
+- `rows_handle`: Rows/result set handle.
+
+**Returns:**
+- `Ok(())` if rows were closed successfully.
+- `Err(String)` if closing failed.
+
+---
+
+#### `teradatarustapi::set_autocommit`
+
+Sets the auto-commit mode for the database connection.
+
+    pub fn set_autocommit(
+        u_log: u64,
+        conn_handle: u64,
+        b: bool,
+    ) -> Result<(), String>
+
+**Arguments:**
+- `u_log`: Log bitmask for the session.
+- `conn_handle`: Connection handle.
+- `b`: Boolean to enable (`true`) or disable (`false`) auto-commit.
+
+**Returns:**
+- `Ok(())` if auto-commit was set.
+- `Err(String)` if operation failed.
+
+---
+
+#### `teradatarustapi::commit`
+
+Commits the current transaction on the database connection.
+
+    pub fn commit(
+        u_log: u64,
+        conn_handle: u64,
+    ) -> Result<(), String>
+
+**Arguments:**
+- `u_log`: Log bitmask for the session.
+- `conn_handle`: Connection handle.
+
+**Returns:**
+- `Ok(())` if the transaction was committed.
+- `Err(String)` if commit failed.
+
+---
+
+#### `teradatarustapi::rollback`
+
+Rolls back the current transaction on the database connection.
+
+    pub fn rollback(
+        u_log: u64,
+        conn_handle: u64,
+    ) -> Result<(), String>
+
+**Arguments:**
+- `u_log`: Log bitmask for the session.
+- `conn_handle`: Connection handle.
+
+**Returns:**
+- `Ok(())` if the transaction was rolled back.
+- `Err(String)` if rollback failed.
 
 <a id="ConnectionParameters"></a>
 
@@ -744,263 +1007,6 @@ Or wrap query in a view with `CAST` or `TRIM` to avoid trailing space padding:
 `SELECT c1, c2 FROM MyView`
 
 This technique is also demonstrated in sample program `CharPadding.py`.
-
-<a id="LibraryFunctions"></a>
-
-### Library Functions
-
-This package's `lib.rs` provides the following `pub` functions.
-
----
-
-#### `teradatarustapi::load_driver`
-
-Loads the Teradata GoSQL Driver DLL or shared library from the specified directory.
-
-    pub fn load_driver(
-        lib_dir: &str
-    ) -> Result<(), String>
-
-**Arguments:**
-- `lib_dir`: Path to the directory containing the shared library.
-
-**Returns:**
-- `Ok(())` if the library was loaded successfully.
-- `Err(String)` with an error message if loading failed.
-
----
-
-#### `teradatarustapi::create_connection`
-
-Establishes a new connection to the Teradata database using the provided connection parameters.
-
-    pub fn create_connection(
-        connect_params_json: &str,
-    ) -> Result<(u64, u64), String>
-
-**Arguments:**
-- `connect_params_json`: JSON string containing connection parameters.
-
-**Returns:**
-- `Ok((u_log, conn_handle))`: Tuple with log bitmask and connection handle.
-- `Err(String)`: Error message if connection creation fails.
-
----
-
-#### `teradatarustapi::go_close_connection_wrapper`
-
-Closes an open database connection.
-
-    pub fn go_close_connection_wrapper(
-        u_log: u64,
-        conn_handle: u64,
-    ) -> Result<(), String>
-
-**Arguments:**
-- `u_log`: Log bitmask for the session.
-- `conn_handle`: Connection handle to close.
-
-**Returns:**
-- `Ok(())` if the connection was closed successfully.
-- `Err(String)` if closing failed.
-
----
-
-#### `teradatarustapi::rustgo_create_rows_wrapper`
-
-Submits a SQL request to the database and creates a result set.
-
-    pub fn rustgo_create_rows_wrapper(
-        u_log: u64,
-        conn_handle: u64,
-        request_text: &str,
-        bind_values: &str,
-    ) -> Result<u64, String>
-
-**Arguments:**
-- `u_log`: Log bitmask for the session.
-- `conn_handle`: Connection handle.
-- `request_text`: SQL request string.
-- `bind_values`: JSON string of bind values.
-
-**Returns:**
-- `Ok(rows_handle)`: Handle for the created rows/result set.
-- `Err(String)`: Error message if creation fails.
-
----
-
-#### `teradatarustapi::go_cancel_request_wrapper`
-
-Cancels an in-progress database request.
-
-    pub fn go_cancel_request_wrapper(
-        u_log: u64,
-        conn_handle: u64,
-    ) -> Result<(), String>
-
-**Arguments:**
-- `u_log`: Log bitmask for the session.
-- `conn_handle`: Connection handle.
-
-**Returns:**
-- `Ok(())` if the request was cancelled.
-- `Err(String)` if cancellation failed.
-
----
-
-#### `teradatarustapi::rustgo_result_metadata_wrapper`
-
-Retrieves metadata for a result set, such as activity count, activity type, activity name (kind of SQL request), and column metadata.
-
-    pub fn rustgo_result_metadata_wrapper(
-        u_log: u64,
-        rows_handle: u64,
-    ) -> Result<(u64, u16, String, String), String>
-
-**Arguments:**
-- `u_log`: Log bitmask for the session.
-- `rows_handle`: Rows/result set handle.
-
-**Returns:**
-- `Ok((activity_count, activity_type, activity_name, column_metadata))`: Tuple with metadata.
-- `Err(String)`: Error message if retrieval fails.
-
-Column metadata is a string containing a JSON object.
-
-Key          | Value
------------- | ---
-ColumnName   | Column names as JSON array of string
-MaxByteCount | Maximum column byte count as JSON array of number
-Nullable     | Column nullability as JSON array of boolean
-Precision    | Column precision as JSON array of number
-Scale        | Column scale as JSON array of number
-TypeName     | Column types as JSON array of string
-
-For example, given the following table:
-
-    create table tab (c1 integer, c2 varchar(100))
-
-The query `select * from tab` would produce the following column metadata:
-
-    {"ColumnName":["c1","c2"],"MaxByteCount":[4,200],"Nullable":[true,true],"Precision":[10,0],"Scale":[0,0],"TypeName":["INTEGER","VARCHAR"]}
-
----
-
-#### `teradatarustapi::rustgo_fetch_row_wrapper`
-
-Fetches the next row from a result set. The row is returned as a string containing a JSON array of column values.
-
-    pub fn rustgo_fetch_row_wrapper(
-        u_log: u64,
-        rows_handle: u64,
-    ) -> Result<Option<String>, String>
-
-**Arguments:**
-- `u_log`: Log bitmask for the session.
-- `rows_handle`: Rows/result set handle.
-
-**Returns:**
-- `Ok(Some(row))`: JSON string for a fetched row.
-- `Ok(None)`: No more rows.
-- `Err(String)`: Error message if fetch fails.
-
----
-
-#### `teradatarustapi::go_next_result_wrapper`
-
-Advances to the next result set, if available.
-
-    pub fn go_next_result_wrapper(
-        u_log: u64,
-        rows_handle: u64,
-    ) -> Result<bool, String>
-
-**Arguments:**
-- `u_log`: Log bitmask for the session.
-- `rows_handle`: Rows/result set handle.
-
-**Returns:**
-- `Ok(true)`: Another result set is available.
-- `Ok(false)`: No more results.
-- `Err(String)`: Error message if operation fails.
-
----
-
-#### `teradatarustapi::go_close_rows_wrapper`
-
-Closes a result set and releases associated resources.
-
-    pub fn go_close_rows_wrapper(
-        u_log: u64,
-        rows_handle: u64,
-    ) -> Result<(), String>
-
-**Arguments:**
-- `u_log`: Log bitmask for the session.
-- `rows_handle`: Rows/result set handle.
-
-**Returns:**
-- `Ok(())` if rows were closed successfully.
-- `Err(String)` if closing failed.
-
----
-
-#### `teradatarustapi::set_autocommit`
-
-Sets the auto-commit mode for the database connection.
-
-    pub fn set_autocommit(
-        u_log: u64,
-        conn_handle: u64,
-        b: bool,
-    ) -> Result<(), String>
-
-**Arguments:**
-- `u_log`: Log bitmask for the session.
-- `conn_handle`: Connection handle.
-- `b`: Boolean to enable (`true`) or disable (`false`) auto-commit.
-
-**Returns:**
-- `Ok(())` if auto-commit was set.
-- `Err(String)` if operation failed.
-
----
-
-#### `teradatarustapi::commit`
-
-Commits the current transaction on the database connection.
-
-    pub fn commit(
-        u_log: u64,
-        conn_handle: u64,
-    ) -> Result<(), String>
-
-**Arguments:**
-- `u_log`: Log bitmask for the session.
-- `conn_handle`: Connection handle.
-
-**Returns:**
-- `Ok(())` if the transaction was committed.
-- `Err(String)` if commit failed.
-
----
-
-#### `teradatarustapi::rollback`
-
-Rolls back the current transaction on the database connection.
-
-    pub fn rollback(
-        u_log: u64,
-        conn_handle: u64,
-    ) -> Result<(), String>
-
-**Arguments:**
-- `u_log`: Log bitmask for the session.
-- `conn_handle`: Connection handle.
-
-**Returns:**
-- `Ok(())` if the transaction was rolled back.
-- `Err(String)` if rollback failed.
 
 <a id="EscapeSyntax"></a>
 

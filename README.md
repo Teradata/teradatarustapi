@@ -136,20 +136,29 @@ The sample programs can be executed with the `cargo run` command.
 * The first command line argument of each sample program is the directory name for the directory containing the Teradata GoSQL Driver DLLs and shared libraries. This is typically the top level directory of the repo.
 * The second command line argument of each sample program is the connection parameter JSON string.
 
+#### Program `sample`
+
 The `sample` program demonstrates how to execute a variety of SQL requests and obtain the results.
 
     cargo run --bin sample . '{"host":"databasename","user":"guest","password":"please"}'
+
+#### Program `cmdline`
 
 The `cmdline` program offers a simple command line interface to execute SQL requests.
 
     cargo run --bin cmdline . '{"host":"databasename","user":"guest","password":"please"}' "select * from DBC.DBCInfo order by 1"
 
-Multiple SQL requests can be specified for the `cmdline` program, and bind values must be specified after each SQL request. Specify bind values as a JSON array of arrays, or specify JSON `null` for no bind values.
+Multiple SQL requests can be specified for the `cmdline` program.
 
     cargo run --bin cmdline . '{"host":"databasename","user":"guest","password":"please"}' \
     "create volatile table vtab (c1 integer, c2 varchar(100)) on commit preserve rows" null \
     "insert into vtab values (?, ?)" '[[123,"hello"],[456,"world"],[789,null]]' \
     "select * from vtab order by 1"
+
+Bind values must be specified after each SQL request except the last.
+* Specify bind values as a JSON array of arrays.
+* Specify JSON `null` for no bind values.
+* If bind values are omitted after the last SQL request, they default to JSON `null` for no bind values.
 
 <a id="LibraryFunctions"></a>
 

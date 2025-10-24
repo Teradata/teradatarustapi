@@ -1,0 +1,12 @@
+# Later lines override earlier lines
+
+# Use Git's algorithm for detecting text files
+*              text=auto
+
+# Unix files that must always have LF line ending
+*.sh           text eol=lf
+
+# Binary files that should not be changed by Git
+*.dll          -text
+*.dylib        -text
+*.so           -text

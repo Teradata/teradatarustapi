@@ -373,7 +373,6 @@ fn get_extension() -> String {
 			}
 		}
 		"macos" => "dylib".to_string(),
-		"aix" => "aix.so".to_string(),
 		_ => {
 			if b_arm && b_fips {
 				"arm.fips.so".to_string()

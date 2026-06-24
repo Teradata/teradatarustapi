@@ -1565,7 +1565,14 @@ Limitations when exporting to CSV files:
 
 ### Change Log
 
+`20.0.62` - June 24, 2026
+* GOSQL-337 escape function teradata_read_jsonl
+* GOSQL-401 Update third party license files for parquet-go and dependencies
+* GOSQL-403 more accurate severity keyword for Go TeraGSS error messages
+* GOSQL-405 Improve error message for logmech=JWT when logdata is missing token= prefix
+
 `20.0.61` - June 4, 2026
+* GOSQL-371 reduce size of Parquet reader library
 * GOSQL-389 Replace Apache Arrow with parquet-go/parquet-go
 * GOSQL-399 Switch to Go 1.26.4
 

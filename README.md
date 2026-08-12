@@ -49,6 +49,7 @@ Copyright 2026 Teradata. All Rights Reserved.
 * [CSV Batch Inserts](#CSVBatchInserts)
 * [Parquet Batch Inserts](#ParquetBatchInserts)
 * [JSON Batch Inserts](#JSONBatchInserts)
+* [JSONL Batch Inserts](#JSONLBatchInserts)
 * [CSV Export Results](#CSVExportResults)
 * [Change Log](#ChangeLog)
 
@@ -432,7 +433,7 @@ Our goal is consistency for the connection parameters offered by this driver and
 Parameter               | Default     | Type           | Description
 ----------------------- | ----------- | -------------- | ---
 `account`               |             | string         | <a id="cp_account"></a>               Specifies the database account. Equivalent to the Teradata JDBC Driver `ACCOUNT` connection parameter.
-`browser`               |             | string         | <a id="cp_browser"></a>               Specifies the command to open the browser for Browser Authentication when `logmech` is `BROWSER`. Browser Authentication is supported for Windows and macOS. Equivalent to the Teradata JDBC Driver `BROWSER` connection parameter.<br/>The specified command must include a placeholder token, literally specified as `PLACEHOLDER`, which the driver will replace with the Identity Provider authorization endpoint URL. The `PLACEHOLDER` token is case-sensitive and must be specified in uppercase.<br/>&bull; On Windows, the default command is `cmd /c start "title" "PLACEHOLDER"`. Windows command syntax requires the quoted title to precede the quoted URL.<br/>&bull; On macOS, the default command is `open PLACEHOLDER`. macOS command syntax does not allow the URL to be quoted.
+`browser`               |             | string         | <a id="cp_browser"></a>               Specifies the command to open the browser for Browser Authentication when `logmech` is `BROWSER`. Browser Authentication is supported for Windows and macOS. Equivalent to the Teradata JDBC Driver `BROWSER` connection parameter.<br/>The specified command must match the value of the `TERADATA_BROWSER` environment variable.<br/>The specified command must include a placeholder token, literally specified as `PLACEHOLDER`, which the driver will replace with the Identity Provider authorization endpoint URL. The `PLACEHOLDER` token is case-sensitive and must be specified in uppercase.<br/>&bull; On Windows, the default command is `cmd /c start "title" "PLACEHOLDER"`. Windows command syntax requires the quoted title to precede the quoted URL.<br/>&bull; On macOS, the default command is `open PLACEHOLDER`. macOS command syntax does not allow the URL to be quoted.<br/>The `TERADATA_BROWSER` environment variable is not required when this connection parameter is omitted on Windows or macOS.
 `browser_tab_timeout`   | `"5"`       | quoted integer | <a id="cp_browser_tab_timeout"></a>   Specifies the number of seconds to wait before closing the browser tab after Browser Authentication is completed. The default is 5 seconds. The behavior is under the browser's control, and not all browsers support automatic closing of browser tabs. Typically, the tab used to log on will remain open indefinitely, but the second and subsequent tabs will be automatically closed. Specify `0` (zero) to close the tab immediately. Specify `-1` to turn off automatic closing of browser tabs. Browser Authentication is supported for Windows and macOS. Equivalent to the Teradata JDBC Driver `BROWSER_TAB_TIMEOUT` connection parameter.
 `browser_timeout`       | `"180"`     | quoted integer | <a id="cp_browser_timeout"></a>       Specifies the number of seconds that the driver will wait for Browser Authentication to complete. The default is 180 seconds (3 minutes). Browser Authentication is supported for Windows and macOS. Equivalent to the Teradata JDBC Driver `BROWSER_TIMEOUT` connection parameter.
 `code_append_file`      | `"-out"`    | string         | <a id="cp_code_append_file"></a>      Specifies how to display the verification URL and code. Optional when `logmech` is `CODE` and ignored for other `logmech` values. The default `-out` prints the verification URL and code to stdout. Specify `-err` to print the verification URL and code to stderr. Specify a file name to append the verification URL and code to an existing file or create a new file if the file does not exist. Equivalent to the Teradata JDBC Driver `CODE_APPEND_FILE` connection parameter.
@@ -1529,6 +1530,37 @@ Limitations when using JSON batch inserts:
 * For SQL batch insert, some records may be inserted before a parsing error occurs. A list of the parser errors will be returned.
 * Using a JSON file with FastLoad has the same limitations and is used the same way as described in the [FastLoad](#FastLoad) section.
 
+<a id="JSONLBatchInserts"></a>
+
+### JSONL Batch Inserts
+
+The driver can read batch insert bind values from a JSONL (JSON Lines) file. This feature can be used with SQL batch inserts and with FastLoad.
+
+To specify batch insert bind values in a JSONL file, the application prepends the escape function `{fn teradata_read_jsonl(`*JSONLFileName*`)}` to the `INSERT` statement.
+
+Each line of a JSONL file is a self-contained JSON object `{...}`. Lines that are empty or contain only whitespace are skipped. The file does not have a header line.
+
+The application can specify batch insert bind values in a JSONL file, or specify bind parameter values, but not both together. The driver returns an error if both are specified together.
+
+Considerations when using a JSONL file:
+* Each non-empty line of the JSONL file must be a valid JSON object `{...}`.
+* For each parameter marker in the `INSERT` statement, the driver looks up the corresponding value in the JSON object by the destination column name. Every parameter marker must have a matching key in the JSON object.
+* JSON object keys may appear in any order within each record. Key name matching is case-sensitive.
+* Extra keys in a JSON object that do not correspond to any parameter marker are silently ignored.
+* A JSON `null` value is treated as a SQL `NULL` value.
+* The driver recursively flattens nested JSON objects, promoting each nested key to the top level so it can be matched to a parameter marker by name. A nested object or array is also available as the string representation of its enclosing parent object. This allows the same data to be inserted into multiple columns at different levels of granularity. For example, given `{"address": {"city": "Dallas"}}`, the `address` parameter marker receives the JSON string `{"city": "Dallas"}` and the `city` parameter marker receives the scalar value `"Dallas"`.
+* A JSON array of floats, such as a vector embedding `[0.123, 0.456, ...]`, is transmitted to the database as its `VARCHAR` string representation, which the database can automatically convert to a `VECTOR` column value using its built-in To-SQL transform.
+* A string field length greater than 32KB is transmitted to the database as a `DEFERRED CLOB` for a SQL batch insert. A field length greater than 32KB is not supported with FastLoad.
+
+Limitations when using JSONL batch inserts:
+* Not all data types are supported. For example, `BLOB` and `BYTE` are not supported.
+* Bound parameter values cannot be specified in the execute method when using the escape function `{fn teradata_read_jsonl(`*JSONLFileName*`)}`.
+* Duplicate JSON keys, including keys from different nesting levels that collide after flattening, cause the driver to return an error.
+* The JSONL file must contain at least one valid record.
+* For FastLoad, the insert operation will fail if a record is improperly formatted and a parser error occurs.
+* For SQL batch insert, some records may be inserted before a parsing error occurs. A list of the parser errors will be returned.
+* Using a JSONL file with FastLoad has the same limitations and is used the same way as described in the [FastLoad](#FastLoad) section.
+
 <a id="CSVExportResults"></a>
 
 ### CSV Export Results
@@ -1584,6 +1616,9 @@ Limitations when exporting to CSV files:
 <a id="ChangeLog"></a>
 
 ### Change Log
+
+`20.0.65` - August 12, 2026
+* GOSQL-440 validate browser= connection parameter against TERADATA_BROWSER environment variable
 
 `20.0.64` - July 31, 2026
 * GOSQL-426 add NullableKnown field to fake result set column and parameter metadata JSON
